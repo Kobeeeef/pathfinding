@@ -1,25 +1,38 @@
+import math
 import random
-from enum import Enum
 from queue import PriorityQueue
 
-# Define variables (replacing constants)
-inches_per_square = 10  # Accuracy - Inches Per Square
-total_map_size_x_inches = 651  # 2024 FRC Game Field Size X
-total_map_size_y_inches = 323  # 2024 FRC Game Field Size Y
-robot_location = (2, 1)  # Robot location
-goal_location = (10, 30)  # Goal/Note location
+# Define constants
+INCHES_PER_SQUARE = 10  # Accuracy - Inches per square
+TOTAL_MAP_SIZE_X_INCHES = 651  # 2024 FRC Game Field Size X
+TOTAL_MAP_SIZE_Y_INCHES = 323  # 2024 FRC Game Field Size Y
+ROBOT_LOCATION = (2, 1)  # Robot location
+GOAL_LOCATION = (10, 30)  # Goal location
 
 # Calculate the total size of the grid in terms of squares
-map_size_x_squares = total_map_size_x_inches // inches_per_square
-map_size_y_squares = total_map_size_y_inches // inches_per_square
+map_size_x_squares = TOTAL_MAP_SIZE_X_INCHES // INCHES_PER_SQUARE
+map_size_y_squares = TOTAL_MAP_SIZE_Y_INCHES // INCHES_PER_SQUARE
 
 # Generate random obstacles
-obstacles = [(random.randint(0, map_size_y_squares - 1), random.randint(0, map_size_x_squares - 1)) for _ in range(15)]
-print(obstacles)
+obstacles = [(random.randint(0, map_size_y_squares - 1), random.randint(0, map_size_x_squares - 1)) for _ in range(100)]
+print("Obstacles:", obstacles)
+
 
 def heuristic(a, b):
-    """Calculate the Manhattan distance between two points."""
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+    """
+    Calculate the heuristic distance between two points using squared Euclidean distance.
+
+    Parameters:
+    a (tuple): The coordinates of the first point (x, y).
+    b (tuple): The coordinates of the goal point (x, y).
+    D (float): The cost factor applied to the squared distance (default is 1).
+
+    Returns:
+    float: The heuristic distance based on squared Euclidean distance.
+    """
+    dx = abs(a[0] - b[0])
+    dy = abs(a[1] - b[1])
+    return math.sqrt((dx * dx + dy * dy))
 
 
 def a_star_search(start, goal, obstacles, map_size_x, map_size_y):
@@ -59,14 +72,12 @@ def a_star_search(start, goal, obstacles, map_size_x, map_size_y):
 
 
 # Run the A* algorithm
-path = a_star_search(robot_location, goal_location, set(obstacles), map_size_x_squares, map_size_y_squares)
-print(path)
+path = a_star_search(ROBOT_LOCATION, GOAL_LOCATION, set(obstacles), map_size_x_squares, map_size_y_squares)
+print("Path:", path)
 
 
-
-
-# Display the map in the console
 def display_map(size_x, size_y, robot, goal, obstacles, path):
+    """Display the map in the console."""
     grid = [['.' for _ in range(size_x)] for _ in range(size_y)]
     grid[robot[0]][robot[1]] = 'R'  # Mark the robot location
     grid[goal[0]][goal[1]] = 'G'  # Mark the goal location
@@ -82,4 +93,4 @@ def display_map(size_x, size_y, robot, goal, obstacles, path):
 
 
 # Display the map with the path
-display_map(map_size_x_squares, map_size_y_squares, robot_location, goal_location, obstacles, path)
+display_map(map_size_x_squares, map_size_y_squares, ROBOT_LOCATION, GOAL_LOCATION, obstacles, path)
