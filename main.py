@@ -3,7 +3,7 @@ import random
 from queue import PriorityQueue
 
 # Define constants
-INCHES_PER_SQUARE = 10  # Accuracy - Inches per square
+INCHES_PER_SQUARE = 5  # Accuracy - Inches per square
 TOTAL_MAP_SIZE_X_INCHES = 651  # 2024 FRC Game Field Size X
 TOTAL_MAP_SIZE_Y_INCHES = 323  # 2024 FRC Game Field Size Y
 ROBOT_LOCATION = (2, 1)  # Robot location
@@ -14,25 +14,50 @@ map_size_x_squares = TOTAL_MAP_SIZE_X_INCHES // INCHES_PER_SQUARE
 map_size_y_squares = TOTAL_MAP_SIZE_Y_INCHES // INCHES_PER_SQUARE
 
 # Generate random obstacles
-obstacles = [(random.randint(0, map_size_y_squares - 1), random.randint(0, map_size_x_squares - 1)) for _ in range(100)]
+obstacles = [(random.randint(0, map_size_y_squares - 1), random.randint(0, map_size_x_squares - 1)) for _ in range(190)]
+
+
+def remove_obstacles(obstacles, positions):
+    return [obstacle for obstacle in obstacles if obstacle not in positions]
+
+
+# Remove obstacles at the robot and goal locations
+obstacles = remove_obstacles(obstacles, [ROBOT_LOCATION, GOAL_LOCATION])
 print("Obstacles:", obstacles)
 
+# def heuristic(a, b):
+#     """
+#     Calculate the heuristic distance between two points using squared Euclidean distance.
+#
+#     Parameters:
+#     a (tuple): The coordinates of the first point (x, y).
+#     b (tuple): The coordinates of the goal point (x, y).
+#
+#     Returns:
+#     float: The heuristic distance based on squared Euclidean distance.
+#     """
+#     dx = abs(a[0] - b[0])
+#     dy = abs(a[1] - b[1])
+#     return math.sqrt((dx * dx + dy * dy))
 
-def heuristic(a, b):
+
+def heuristic(a, b, D=1, D2=1.414):
     """
-    Calculate the heuristic distance between two points using squared Euclidean distance.
+    Calculate the heuristic distance between two points using a combination
+    of Manhattan distance and diagonal distance.
 
     Parameters:
     a (tuple): The coordinates of the first point (x, y).
     b (tuple): The coordinates of the goal point (x, y).
-    D (float): The cost factor applied to the squared distance (default is 1).
+    D (float): The cost of moving horizontally or vertically.
+    D2 (float): The cost of moving diagonally (default to sqrt(2) for a grid).
 
     Returns:
-    float: The heuristic distance based on squared Euclidean distance.
+    float: The heuristic distance between the points.
     """
     dx = abs(a[0] - b[0])
     dy = abs(a[1] - b[1])
-    return math.sqrt((dx * dx + dy * dy))
+    return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
 
 
 def a_star_search(start, goal, obstacles, map_size_x, map_size_y):
@@ -53,6 +78,7 @@ def a_star_search(start, goal, obstacles, map_size_x, map_size_y):
                 path.append(current)
                 current = came_from[current]
             path.append(start)
+
             return path[::-1]  # Return reversed path
 
         # Get neighbors
