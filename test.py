@@ -21,22 +21,21 @@ def willObjectCollideWithRobot(P_A0, V_A, S_A, P_B0, V_B, S_B, t_max, d_min, inc
     """
 
     for t in np.linspace(0, t_max, num=1000):
-        P_A_t = P_A0 + V_A * S_A * t
-        P_B_t = P_B0 + V_B * S_B * t
+        P_A_t = np.array(P_A0) + np.array(V_A) * S_A * t
+        P_B_t = np.array(P_B0) + np.array(V_B) * S_B * t
         distance = np.linalg.norm(P_A_t - P_B_t) * inches_per_point
         if distance < d_min:
             return True
     return False
 
 
-P_A0 = np.array([0, 0])  # Initial position of Robot A
-V_A = np.array([1, 0])   # Moving to the right
-S_A = 10               # Speed of Robot A
+P_A0 = [0, 0]  # Initial position of Robot A
+V_A = [1, 0]  # Moving to the right
+S_A = 10  # Speed of Robot A
 
-P_B0 = np.array([100, 0])  # Initial position of Robot B
-V_B = np.array([1, 0])    # Moving to the left
-S_B = 10                 # Speed of Robot B
+P_B0 = [100, 0]  # Initial position of Robot B
+V_B = [1, 0]  # Moving to the left
+S_B = 10  # Speed of Robot B
 
 collision = willObjectCollideWithRobot(P_A0, V_A, S_A, P_B0, V_B, S_B, t_max=10, d_min=10, inches_per_point=1)
 print(collision)
-
