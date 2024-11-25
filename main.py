@@ -3,6 +3,7 @@ from queue import PriorityQueue
 
 import numpy as np
 
+# Positions are in Y, X not X, Y
 # Define constants
 INCHES_PER_SQUARE = 5  # Accuracy - Inches per square
 TOTAL_MAP_SIZE_X_INCHES = 651  # 2024 FRC Game Field Size X
@@ -26,10 +27,10 @@ def remove_obstacles(obstacles, positions):
 obstacles = remove_obstacles(obstacles, [ROBOT_LOCATION, GOAL_LOCATION])
 
 
-def willObjectCollideWithRobot(P_A0, V_A, S_A, P_B0, V_B, S_B, t_max, d_min, inches_per_point):
+def willObjectCollideWithRobot(P_A0, V_A, P_B0, V_B, t_max, d_min, inches_per_point):
     for t in np.linspace(0, t_max, num=1000):
-        P_A_t = (P_A0[0] + V_A[0] * S_A * t, P_A0[1] + V_A[1] * S_A * t)
-        P_B_t = (P_B0[0] + V_B[0] * S_B * t, P_B0[1] + V_B[1] * S_B * t)
+        P_A_t = (P_A0[0] + V_A[0] * t, P_A0[1] + V_A[1] * t)
+        P_B_t = (P_B0[0] + V_B[0] * t, P_B0[1] + V_B[1] * t)
         distance = np.linalg.norm(np.array(P_A_t) - np.array(P_B_t)) * inches_per_point
         if distance < d_min:
             collision_position = ((P_A_t[0] + P_B_t[0]) / 2, (P_A_t[1] + P_B_t[1]) / 2)
@@ -87,15 +88,15 @@ def a_star_search(start, goal, obstacles, map_size_x, map_size_y):
     return []
 
 
-def reroute_a_star(start, goal, obstacles, P_B0, V_B, S_B, t_max, d_min, inches_per_point):
-    P_B_predicted = P_B0 + V_B * S_B * t_max
+def reroute_a_star(start, goal, obstacles, P_B0, V_B, t_max, d_min, inches_per_point):
+    P_B_predicted = [P_B0[0] + V_B[0] * t_max, P_B0[1] + V_B[1] * t_max]  # Return as list
     grid = [[0 for _ in range(map_size_x_squares)] for _ in range(map_size_y_squares)]
     mark_collision_zone_on_grid(grid, P_B_predicted, d_min, inches_per_point)
     for i in range(len(grid)):
         for j in range(len(grid[0])):
             if grid[i][j] == 1:
                 obstacles.add((i, j))
-    return a_star_search(start, goal, obstacles, map_size_x_squares, map_size_y_squares)
+    return a_star_search(start, goal, obstacles, map_size_x_squares, map_size_y_squares), P_B_predicted
 
 
 def display_map(size_x, size_y, robot, goal, obstacles, path):
@@ -117,7 +118,7 @@ def log_step(step_number, message):
 
 
 def main():
-    log_step(1, "Making path...")
+    log_step(1, "Calculating path...")
     path = a_star_search(ROBOT_LOCATION, GOAL_LOCATION, set(obstacles), map_size_x_squares, map_size_y_squares)
 
     if path:
@@ -127,18 +128,18 @@ def main():
         log_step(2, "No path found.")
         return
 
-    log_step(4, "Checking for collisions...")
+    log_step(4, "Calculating for collisions...")
 
-    V_A = (1, 0)
-    S_A = 10
+    V_A = (0,10)
 
-    P_B0 = (2, 4)
-    V_B = (0, -20)
-    S_B = 10
+    P_B0 = (2, 100)
+    V_B = (0, -10)
 
-    collision_detected, collision_time, collision_position, collision_distance = willObjectCollideWithRobot(ROBOT_LOCATION, V_A, S_A, P_B0,
-                                                                                        V_B, S_B, t_max=10, d_min=10,
-                                                                                        inches_per_point=INCHES_PER_SQUARE)
+
+    collision_detected, collision_time, collision_position, collision_distance = willObjectCollideWithRobot(
+        ROBOT_LOCATION, V_A, P_B0,
+        V_B, t_max=0.2, d_min=10,
+        inches_per_point=INCHES_PER_SQUARE)
 
     if collision_detected:
         log_step(
@@ -148,7 +149,7 @@ def main():
             f"Distance at collision: {collision_distance:.2f} inches (threshold: {10} inches)."
         )
         log_step(6, "Rerouting new path...")
-        new_path = reroute_a_star(ROBOT_LOCATION, GOAL_LOCATION, set(obstacles), P_B0, V_B, S_B, t_max=10, d_min=10,
+        new_path, pb_predicted = reroute_a_star(ROBOT_LOCATION, GOAL_LOCATION, set(obstacles), P_B0, V_B, t_max=1, d_min=10,
                                   inches_per_point=INCHES_PER_SQUARE)
         if new_path:
             log_step(7, f"New Path: {new_path}")

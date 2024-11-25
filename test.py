@@ -1,41 +1,117 @@
+import cv2
 import numpy as np
 
+import astar
 
-def willObjectCollideWithRobot(P_A0, V_A, S_A, P_B0, V_B, S_B, t_max, d_min, inches_per_point):
-    """
-    Determines if two moving objects (robot and another object) will collide based on their paths, velocities, and speeds.
+# Constants for map size (in centimeters)
+MAP_X_SIZE = 1200  # map width (in cm)
+MAP_Y_SIZE = 650  # map height (in cm)
+ROBOT_SIZE = 30  # safe distance around obstacles (in cm),
+# Global variables
+xbot = None  # Store the position of XBOT as a single tuple
+goal = None  # Store the goal position as a single tuple
 
-    Parameters:
-    - P_A0: np.array([x, y]) - Initial position of Robot A (your robot) in inches.
-    - V_A: np.array([vx, vy]) - Unit vector for Robot A's velocity (direction).
-    - S_A: float - Speed of Robot A in inches per second.
-    - P_B0: np.array([x, y]) - Initial position of Robot B (other robot/object) in inches.
-    - V_B: np.array([vx, vy]) - Unit vector for Robot B's velocity (direction).
-    - S_B: float - Speed of Robot B in inches per second.
-    - t_max: float - The maximum time (in seconds) to predict the movement of both objects.
-    - d_min: float - Minimum safe distance between the two objects (in inches).
-    - inches_per_point: float - The conversion factor for how many inches each point represents in real-world units.
+# Create the map image
+img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255  # White background
 
-    Returns:
-    - bool: True if the objects will collide, False if they won't.
-    """
-
-    for t in np.linspace(0, t_max, num=1000):
-        P_A_t = np.array(P_A0) + np.array(V_A) * S_A * t
-        P_B_t = np.array(P_B0) + np.array(V_B) * S_B * t
-        distance = np.linalg.norm(P_A_t - P_B_t) * inches_per_point
-        if distance < d_min:
-            return True
-    return False
+path = []
+obstacles = []
 
 
-P_A0 = [0, 0]  # Initial position of Robot A
-V_A = [1, 0]  # Moving to the right
-S_A = 10  # Speed of Robot A
+# Function to select positions for XBOT or Goal
+def select_position(event, x, y, flags, param):
+    global xbot, goal, img, obstacles
 
-P_B0 = [100, 0]  # Initial position of Robot B
-V_B = [1, 0]  # Moving to the left
-S_B = 10  # Speed of Robot B
+    if param == 'X':  # Set XBOT position
+        if event == cv2.EVENT_LBUTTONDOWN:
+            xbot = (x, y)  # Store XBOT position as a tuple
+            print(f"XBOT set at position: ({x}, {y})")
+            img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255  # Clear the map
+            cv2.circle(img, xbot, 2, (0, 255, 0), -1)
+            cv2.rectangle(img, (x - ROBOT_SIZE, y - ROBOT_SIZE), (x + ROBOT_SIZE, y + ROBOT_SIZE), (0, 255, 0), 1)
+            if goal:  # If a goal is set, draw it
+                cv2.circle(img, goal, 2, (0, 0, 255), -1)
+            for obs in obstacles:  # Redraw obstacles
+                cv2.circle(img, obs, 1, (0, 0, 0), -1)  # Draw each obstacle as black dots
+    elif param == 'G':  # Set Goal position
+        if event == cv2.EVENT_LBUTTONDOWN:
+            goal = (x, y)  # Store Goal position as a tuple
+            print(f"Goal set at position: ({x}, {y})")
+            img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255
+            if xbot:
+                cv2.circle(img, xbot, 2, (0, 255, 0), -1)
+                cv2.rectangle(img, (xbot[0] - ROBOT_SIZE, xbot[1] - ROBOT_SIZE), (xbot[0] + ROBOT_SIZE, xbot[1] + ROBOT_SIZE), (0, 255, 0), 1)
+            cv2.circle(img, goal, 2, (0, 0, 255), -1)
+            for obs in obstacles:
+                cv2.circle(img, obs, 1, (0, 0, 0), -1)
+    elif param == 'O':  # Add Obstacles
+        if event == cv2.EVENT_LBUTTONDOWN or (flags & cv2.EVENT_FLAG_LBUTTON):  # On mouse down or drag
+            if x < MAP_X_SIZE and y < MAP_Y_SIZE:
+                obstacles.append((x, y))
+                print(f"Obstacle added at position: ({x}, {y})")
+                cv2.circle(img, (x, y), 1, (0, 0, 0), -1)  # Draw the obstacle as a small black dot
 
-collision = willObjectCollideWithRobot(P_A0, V_A, S_A, P_B0, V_B, S_B, t_max=10, d_min=10, inches_per_point=1)
-print(collision)
+
+# Function to handle keypress events and mouse callbacks
+def handle_keypress(key):
+    global xbot, goal, img, path, obstacles
+    if key == ord('x'):  # Set XBOT position
+        print("Click to add XBOT position")
+        cv2.setMouseCallback("Path Planning", select_position, 'X')
+    elif key == ord('g'):  # Set Goal position
+        print("Click to add Goal position")
+        cv2.setMouseCallback("Path Planning", select_position, 'G')
+    elif key == ord('o'):  # Set Goal position
+        print("Click to add Obstacle position")
+        cv2.setMouseCallback("Path Planning", select_position, 'O')
+    elif key == ord('p'):
+        print("Planning path...")
+        img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255
+        if xbot:
+            cv2.circle(img, xbot, 2, (0, 255, 0), -1)
+            cv2.rectangle(img, (xbot[0] - ROBOT_SIZE, xbot[1] - ROBOT_SIZE), (xbot[0] + ROBOT_SIZE, xbot[1] + ROBOT_SIZE), (0, 255, 0), 1)
+        cv2.circle(img, goal, 2, (0, 0, 255), -1)
+        for obs in obstacles:
+            cv2.circle(img, obs, 1, (0, 0, 0), -1)
+        if xbot and goal:
+            print(f"XBOT: {xbot}, Goal: {goal}")
+            unsafe_mask = astar.precompute_safe_zones(obstacles, MAP_X_SIZE, MAP_Y_SIZE, ROBOT_SIZE)
+
+            path = astar.a_star_search(xbot, goal, unsafe_mask)
+            if path is None:
+                print("No path found!")
+                return
+            for step in path:
+                cv2.circle(img, step, 1, (255, 0, 0), -1)
+
+            print(f"Path found: {path}")
+        else:
+            print("Please set XBOT and Goal positions first!")
+    elif key == ord('c'):
+        print("Clearing the map...")
+        xbot = None
+        goal = None
+        path = []
+        obstacles = []
+        img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255  # Reset to white background
+
+
+# Main function to run the demo
+def run_demo():
+    global img
+    cv2.imshow("Path Planning", img)
+
+    while True:
+        key = cv2.waitKey(1) & 0xFF
+
+        handle_keypress(key)
+
+        cv2.imshow("Path Planning", img)
+        if key == ord('q'):
+            break
+
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    run_demo()
