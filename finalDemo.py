@@ -104,13 +104,13 @@ def add(angle=0):
         if robot_cursor_velocity > 0:
             cv2.putText(img, f"{robot_cursor_velocity:.2f} cm/s",
                         (robot_cursor_position[0] - 30, robot_cursor_position[1] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                        (255, 0, 0), 1)
+                        (0, 0, 0), 2)
 
             end_point = (int(robot_cursor_position[0] + 80 * np.cos(np.radians(robot_cursor_angle))),
                          int(robot_cursor_position[1] + 80 * np.sin(np.radians(robot_cursor_angle))))
 
             # Draw the direction arrow for the robot cursor
-            cv2.arrowedLine(img, robot_cursor_position, end_point, (255, 0, 0), 2)  # Arrow in blue
+            cv2.arrowedLine(img, robot_cursor_position, end_point, (0, 0, 0), 2)  # Arrow in blue
 
         cv2.circle(img, robot_cursor_position, 2, (0, 255, 0), -1)
 
@@ -172,8 +172,8 @@ def dynamic_obstacles_around_xbot():
     global robot_cursor_position, robot_cursor_velocity, robot_cursor_angle
     if collision_detected():
         # Define window size (you can adjust this as needed)
-        window_size_x = 700  # Size of the window around XBOT in X direction (in centimeters)
-        window_size_y = 700  # Size of the window around XBOT in Y direction (in centimeters)
+        window_size_x = 600  # Size of the window around XBOT in X direction (in centimeters)
+        window_size_y = 600  # Size of the window around XBOT in Y direction (in centimeters)
 
         # Define the window's bounds relative to XBOT
         window_min_x = max(0, xbot[0] - window_size_x // 2)  # Ensure it doesn't go below 0
@@ -201,22 +201,28 @@ def dynamic_obstacles_around_xbot():
         local_obstacles.append((int(future_x_local), int(future_y_local)))
 
         # Filter out any obstacles that are outside the local window
-        local_obstacles = [(x, y) for x, y in local_obstacles if 0 <= x < window_max_x - window_min_x and 0 <= y < window_max_y - window_min_y]
+        local_obstacles = [(x, y) for x, y in local_obstacles if
+                           0 <= x < window_max_x - window_min_x and 0 <= y < window_max_y - window_min_y]
 
         # Ensure the obstacles are within the global map bounds
         local_obstacles = [(x, y) for x, y in local_obstacles if 0 <= x < MAP_X_SIZE and 0 <= y < MAP_Y_SIZE]
-        for a in local_obstacles:
-            cv2.circle(img, (a[0] + window_min_x, a[1] + window_min_y), 10, (0, 0, 0), -1)
+        for x, y in local_obstacles:
+            global_x = x + window_min_x
+            global_y = y + window_min_y
+            print(f"Local: ({x}, {y}), Global: ({global_x}, {global_y})")
+            cv2.circle(img, (global_x, global_y), 10, (0, 0, 0), -1)
 
         cv2.rectangle(img, (window_min_x, window_min_y), (window_max_x, window_max_y), (0, 0, 0), 2)
-        cv2.imshow("Path Planning", img)
-        cv2.waitKey(1)
+        add()
+        cv2.imshow("Path im", img)
+        cv2.waitKey(0)
         print(f"Local obstacles: {local_obstacles}")
 
         # Perform A* search within the local window
         local_path = astar.a_star_search(xbot, goal,
-                                        astar.precompute_safe_zones(local_obstacles,
-                                                                    window_max_x - window_min_x, window_max_y - window_min_y, ROBOT_SIZE))
+                                         astar.precompute_safe_zones(local_obstacles,
+                                                                     window_max_x - window_min_x,
+                                                                     window_max_y - window_min_y, ROBOT_SIZE))
         print(local_path)
         if local_path:
             # If path is found, reconstruct the path to the global scale
@@ -234,8 +240,6 @@ def reconstruct_full_path(local_path, window_min_x, window_min_y):
         global_y = point[1] + window_min_y
         full_path.append((global_x, global_y))
     return full_path
-
-
 
 
 # Function to select positions for XBOT, Goal, or Obstacles
@@ -376,12 +380,17 @@ def handle_keypress(key):
             log_message(SEPARATOR)
             log_message("Planning path...", COLOR_YELLOW)
             log_message(f"XBOT: {xbot}, Goal: {goal}", COLOR_GREEN)
-            unsafe_mask = astar.precompute_safe_zones(static_obstacles + obstacles + opponent_robots, MAP_X_SIZE,
-                                                      MAP_Y_SIZE, ROBOT_SIZE)
-            path = astar.a_star_search(xbot, goal, unsafe_mask)
+            time_before = time.time()
+            unsafe_mask, cost_mask = astar.precompute_safe_zones(static_obstacles, obstacles + opponent_robots,
+                                                                 MAP_X_SIZE,
+                                                                 MAP_Y_SIZE, ROBOT_SIZE)
+            astar.debug_visualize_masks(unsafe_mask, cost_mask)
+
+            path = astar.a_star_search(xbot, goal, unsafe_mask, cost_mask, obstacles + opponent_robots)
             if path is None:
                 log_message("No path found!", COLOR_RED)
                 return
+            log_message(f"Total Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
             waypoints = astar.generate_waypoints(path, 500)
             log_message(f"Path found: {path}", COLOR_GREEN)
             log_message(f"Waypoints extracted: {waypoints}", COLOR_GREEN)
@@ -411,8 +420,8 @@ def handle_keypress(key):
 # Main loop to run the demo
 def run_demo():
     global robot_cursor_velocity
-    cv2.namedWindow("Path Planning", cv2.WINDOW_NORMAL)
-    cv2.setWindowProperty("Path Planning", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    # cv2.namedWindow("Path Planning", cv2.WINDOW_NORMAL)
+    # cv2.setWindowProperty("Path Planning", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     cv2.imshow("Path Planning", img)
 
     while True:
@@ -422,7 +431,7 @@ def run_demo():
             reset_map()
             place_path()
             if prev_robot_cursor_position == robot_cursor_position and (
-                    time.time() - (prev_robot_cursor_time or 0)) > 0.1:
+                    time.time() - (prev_robot_cursor_time or 0)) > 0.3:
                 robot_cursor_velocity = 0
             add()
         if xbot_velocity == 0:
