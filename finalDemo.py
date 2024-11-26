@@ -1,10 +1,10 @@
-import cv2
-import numpy as np
-import astar
-import cv2
-import numpy as np
 import json
 import time
+
+import cv2
+import numpy as np
+
+import astar
 
 # Constants for map size (in centimeters)
 MAP_X_SIZE = 1654  # map width (in cm)
@@ -14,7 +14,7 @@ ROBOT_SIZE = 26  # safe distance around obstacles (in cm)
 # Global variables
 xbot = None  # Store the position of XBOT as a single tuple
 goal = None  # Store the goal position as a single tuple
-#----------
+# ----------
 path = None
 waypoints = None
 static_obstacles = []
@@ -76,7 +76,7 @@ def add(angle=0):
         cv2.circle(img, xbot, 2, (0, 255, 0), -1)
         if xbot_velocity > 0:
             cv2.putText(img, f"{xbot_velocity:.2f} cm/s",
-                        (xbot[0] - 30, xbot[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (xbot[0] - 30, xbot[1] - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                         (0, 0, 0), 2)
         # Get the rotated rectangle points using cv2.boxPoints
         box = cv2.boxPoints(((xbot[0], xbot[1]), (ROBOT_SIZE, ROBOT_SIZE), angle))
@@ -100,14 +100,14 @@ def add(angle=0):
         box = np.int32(box)
         cv2.polylines(img, [box], True, (255, 255, 0), 2)
     if placing_robot and robot_cursor_position:
-        # Draw the XBOT as a circle
+
         if robot_cursor_velocity > 0:
             cv2.putText(img, f"{robot_cursor_velocity:.2f} cm/s",
                         (robot_cursor_position[0] - 30, robot_cursor_position[1] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                         (255, 0, 0), 1)
-            print(angle)
-            end_point = (int(robot_cursor_position[0] + robot_cursor_velocity * np.cos(np.radians(angle))),
-                         int(robot_cursor_position[1] + robot_cursor_velocity * np.sin(np.radians(angle))))
+
+            end_point = (int(robot_cursor_position[0] + 80 * np.cos(np.radians(robot_cursor_angle))),
+                         int(robot_cursor_position[1] + 80 * np.sin(np.radians(robot_cursor_angle))))
 
             # Draw the direction arrow for the robot cursor
             cv2.arrowedLine(img, robot_cursor_position, end_point, (255, 0, 0), 2)  # Arrow in blue
@@ -138,7 +138,7 @@ def mouse_movement(event, x, y, flags, param):
                 robot_cursor_velocity = distance / time_diff
             dx = x - prev_robot_cursor_position[0]
             dy = y - prev_robot_cursor_position[1]
-            print(np.degrees(np.arctan2(dy, dx)))
+
             robot_cursor_angle = np.degrees(np.arctan2(dy, dx))
         # Update the previous position and time after the calculation
         prev_robot_cursor_position = (x, y)
@@ -152,6 +152,90 @@ def place_path():
             cv2.circle(img, step, 1, (255, 0, 0), -1)
         for point in waypoints:
             cv2.circle(img, point, 3, (0, 255, 255), -1)
+
+
+def collision_detected():
+    global xbot, robot_cursor_position, robot_cursor_velocity, robot_cursor_angle
+    if robot_cursor_position and robot_cursor_velocity > 0:
+        # Predict next position of the moving obstacle
+        future_x = robot_cursor_position[0] + robot_cursor_velocity * np.cos(np.radians(robot_cursor_angle))
+        future_y = robot_cursor_position[1] + robot_cursor_velocity * np.sin(np.radians(robot_cursor_angle))
+
+        # Check if the predicted path intersects with XBOT's path
+        distance = np.sqrt((xbot[0] - future_x) ** 2 + (xbot[1] - future_y) ** 2)
+        if distance < (ROBOT_SIZE * 2):  # If too close, trigger local replanning
+            return True
+    return False
+
+
+def dynamic_obstacles_around_xbot():
+    global robot_cursor_position, robot_cursor_velocity, robot_cursor_angle
+    if collision_detected():
+        # Define window size (you can adjust this as needed)
+        window_size_x = 700  # Size of the window around XBOT in X direction (in centimeters)
+        window_size_y = 700  # Size of the window around XBOT in Y direction (in centimeters)
+
+        # Define the window's bounds relative to XBOT
+        window_min_x = max(0, xbot[0] - window_size_x // 2)  # Ensure it doesn't go below 0
+        window_max_x = min(MAP_X_SIZE, xbot[0] + window_size_x // 2)  # Ensure it doesn't exceed MAX_X
+
+        window_min_y = max(0, xbot[1] - window_size_y // 2)  # Ensure it doesn't go below 0
+        window_max_y = min(MAP_Y_SIZE, xbot[1] + window_size_y // 2)  # Ensure it doesn't exceed MAX_Y
+
+        # Collect obstacles in the local window (including dynamic ones)
+        local_obstacles = obstacles.copy()
+
+        # Predict the future position of the moving robot cursor
+        future_x = robot_cursor_position[0] + robot_cursor_velocity * np.cos(np.radians(robot_cursor_angle))
+        future_y = robot_cursor_position[1] + robot_cursor_velocity * np.sin(np.radians(robot_cursor_angle))
+
+        # Convert the future position of the dynamic obstacle to the local window's coordinate system
+        future_x_local = future_x - window_min_x
+        future_y_local = future_y - window_min_y
+
+        # Make sure the dynamic obstacle is within the local window bounds
+        future_x_local = max(0, min(window_max_x - window_min_x - 1, future_x_local))
+        future_y_local = max(0, min(window_max_y - window_min_y - 1, future_y_local))
+
+        # Add the dynamic obstacle to the list in the local window
+        local_obstacles.append((int(future_x_local), int(future_y_local)))
+
+        # Filter out any obstacles that are outside the local window
+        local_obstacles = [(x, y) for x, y in local_obstacles if 0 <= x < window_max_x - window_min_x and 0 <= y < window_max_y - window_min_y]
+
+        # Ensure the obstacles are within the global map bounds
+        local_obstacles = [(x, y) for x, y in local_obstacles if 0 <= x < MAP_X_SIZE and 0 <= y < MAP_Y_SIZE]
+        for a in local_obstacles:
+            cv2.circle(img, (a[0] + window_min_x, a[1] + window_min_y), 10, (0, 0, 0), -1)
+
+        cv2.rectangle(img, (window_min_x, window_min_y), (window_max_x, window_max_y), (0, 0, 0), 2)
+        cv2.imshow("Path Planning", img)
+        cv2.waitKey(1)
+        print(f"Local obstacles: {local_obstacles}")
+
+        # Perform A* search within the local window
+        local_path = astar.a_star_search(xbot, goal,
+                                        astar.precompute_safe_zones(local_obstacles,
+                                                                    window_max_x - window_min_x, window_max_y - window_min_y, ROBOT_SIZE))
+        print(local_path)
+        if local_path:
+            # If path is found, reconstruct the path to the global scale
+            full_path = reconstruct_full_path(local_path, window_min_x, window_min_y)
+            return full_path
+    return None
+
+
+def reconstruct_full_path(local_path, window_min_x, window_min_y):
+    # Reconstruct the full path from the local path
+    full_path = []
+    for point in local_path:
+        # Translate local path points back to global coordinates
+        global_x = point[0] + window_min_x
+        global_y = point[1] + window_min_y
+        full_path.append((global_x, global_y))
+    return full_path
+
+
 
 
 # Function to select positions for XBOT, Goal, or Obstacles
@@ -186,7 +270,7 @@ def select_position(event, x, y, flags, param):
 
 # Function to handle keypress events
 def handle_keypress(key):
-    global xbot, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots,\
+    global xbot, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots, \
         prev_robot_cursor_time, prev_robot_cursor_position, xbot_velocity, prev_xbot_position, prev_xbot_time
 
     if key == ord('x'):  # Set XBOT position
@@ -257,12 +341,15 @@ def handle_keypress(key):
                 angle = 0
 
             reset_map()
-            add(angle)
 
+            local_path = dynamic_obstacles_around_xbot()
+            if local_path:
+                path = local_path
+            add(angle)
             # Display the velocity
             if xbot_velocity > 0:
                 cv2.putText(img, f"{xbot_velocity:.2f} cm/s",
-                            (xbot[0] - 30, xbot[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                            (xbot[0] - 30, xbot[1] - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                             (0, 0, 0), 2)
 
             # Draw the path and waypoints
@@ -272,7 +359,7 @@ def handle_keypress(key):
                 cv2.circle(img, point, 3, (0, 255, 255), -1)
 
             cv2.imshow("Path Planning", img)
-            cv2.waitKey(2)
+            cv2.waitKey(1)
             current += 1
         xbot_velocity = 0
         log_message("Demo finished.", COLOR_BLUE)
@@ -324,8 +411,8 @@ def handle_keypress(key):
 # Main loop to run the demo
 def run_demo():
     global robot_cursor_velocity
-    # cv2.namedWindow("Path Planning", cv2.WINDOW_NORMAL)
-    # cv2.setWindowProperty("Path Planning", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+    cv2.namedWindow("Path Planning", cv2.WINDOW_NORMAL)
+    cv2.setWindowProperty("Path Planning", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     cv2.imshow("Path Planning", img)
 
     while True:
@@ -358,6 +445,8 @@ if __name__ == "__main__":
     log_message("- Press 'g' to set Goal position", COLOR_YELLOW)
     log_message("- Press 'o' to add obstacles", COLOR_YELLOW)
     log_message("- Press 'p' to plan the path", COLOR_YELLOW)
+    log_message("- Press 'a' to add or move robots", COLOR_YELLOW)
+    log_message("- Press 'f' to play the demo", COLOR_YELLOW)
     log_message("- Press 'c' to clear the map", COLOR_YELLOW)
     log_message("- Press 'q' to quit", COLOR_YELLOW)
     log_message(SEPARATOR)
