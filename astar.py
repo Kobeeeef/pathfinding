@@ -3,6 +3,62 @@ import heapq
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 
+import math
+
+
+import math
+
+def generate_waypoints(path, n):
+    """
+    Generates waypoints every nth cm along the path while including critical inflection points.
+
+    Args:
+        path (list of tuples): The path returned by the A* algorithm, a list of (x, y) coordinates.
+        n (int): The interval in centimeters between waypoints.
+
+    Returns:
+        list of tuples: The list of waypoints, including the start, inflection points, and goal.
+    """
+    if not path or len(path) < 2:
+        raise ValueError("Path must contain at least two points (start and goal).")
+
+    waypoints = [path[0]]  # Always include the start point
+    accumulated_distance = 0
+
+    for i in range(1, len(path) - 1):
+        # Calculate Euclidean distance between consecutive points
+        dx = path[i][0] - path[i - 1][0]
+        dy = path[i][1] - path[i - 1][1]
+        distance = math.sqrt(dx**2 + dy**2)
+        accumulated_distance += distance
+
+        # Check for inflection points by comparing slopes of consecutive segments
+        prev_dx = path[i][0] - path[i - 1][0]
+        prev_dy = path[i][1] - path[i - 1][1]
+        curr_dx = path[i + 1][0] - path[i][0]
+        curr_dy = path[i + 1][1] - path[i][1]
+
+        # Calculate slopes
+        prev_slope = math.atan2(prev_dy, prev_dx)
+        curr_slope = math.atan2(curr_dy, curr_dx)
+
+        # Detect inflection points
+        if abs(curr_slope - prev_slope) > math.pi / 6:  # Threshold for a sharp turn
+            waypoints.append(path[i])
+            accumulated_distance = 0  # Reset accumulated distance after inflection
+
+        # Add waypoints at regular intervals
+        if accumulated_distance >= n:
+            waypoints.append(path[i])
+            accumulated_distance = 0
+
+    # Always include the final point
+    if path[-1] not in waypoints:
+        waypoints.append(path[-1])
+
+    return waypoints
+
+
 
 def heuristic(a, b):
     D = 1
