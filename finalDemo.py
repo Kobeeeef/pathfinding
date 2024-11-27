@@ -9,10 +9,10 @@ import astar
 # Constants for map size (in centimeters)
 MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
-ROBOT_SIZE = 43  # safe distance around obstacles (in cm)
+ROBOT_SIZE = 77  # safe distance around obstacles (in cm)
 
-xbot = None
-goal = None
+xbot = (336, 674)
+goal = (1403, 280)
 
 path = None
 waypoints = None
@@ -314,7 +314,7 @@ def handle_keypress(key):
                 current = 0
             xbot = path[current]
 
-            #print(collision_detected())
+            # print(collision_detected())
             if placing_robot:
                 reset_map()
                 place_path()
@@ -343,7 +343,6 @@ def handle_keypress(key):
                 angle = 0
 
             reset_map()
-
 
             add(angle)
 
@@ -385,13 +384,15 @@ def handle_keypress(key):
             unsafe_mask, cost_mask = astar.precompute_safe_zones(static_obstacles, obstacles + opponent_robots,
                                                                  MAP_X_SIZE,
                                                                  MAP_Y_SIZE, ROBOT_SIZE)
-            astar.debug_visualize_masks(unsafe_mask, cost_mask)
+            log_message(f"Precompute Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
+            #astar.debug_visualize_masks(unsafe_mask, cost_mask)
 
+            time_before = time.time()
             path = astar.a_star_search(xbot, goal, unsafe_mask, cost_mask, obstacles + opponent_robots)
             if path is None:
                 log_message("No path found!", COLOR_RED)
                 return
-            log_message(f"Total Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
+            log_message(f"A* Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
             waypoints = astar.generate_waypoints(path, 500)
             log_message(f"Path found: {path}", COLOR_GREEN)
             log_message(f"Waypoints extracted: {waypoints}", COLOR_GREEN)

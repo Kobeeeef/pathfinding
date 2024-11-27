@@ -4,15 +4,16 @@ from scipy.ndimage import distance_transform_edt
 import math
 import matplotlib.pyplot as plt
 import cv2
+
+# Map dimensions
 MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
-# Heuristic function for A* (diagonal distance)
+
+PRIORITIZE_GOAL_WEIGHT = 30
+
+
 def heuristic(a, b):
-    D = 1
-    D2 = 1.414
-    dx = abs(a[0] - b[0])
-    dy = abs(a[1] - b[1])
-    return D * (dx + dy) + (D2 - 2 * D) * min(dx, dy)
+    return PRIORITIZE_GOAL_WEIGHT * (abs(a[0] - b[0]) + abs(a[1] - b[1]))
 
 
 # Precompute unsafe zones and cost mask
@@ -37,6 +38,7 @@ def precompute_safe_zones(obstacles, dynamic_obstacles, map_size_x, map_size_y, 
     return unsafe_mask, cost_mask
 
 
+# Load background map
 background_img = cv2.imread("map.png")
 if background_img is not None:
     background_img = cv2.resize(background_img, (MAP_X_SIZE, MAP_Y_SIZE))
@@ -63,10 +65,11 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
     if 0 <= goal[0] < map_size_x and 0 <= goal[1] < map_size_y:
         unsafe_mask[goal[1], goal[0]] = False
         cost_mask[goal[1], goal[0]] = 0
+
     i = 0
     while open_set:
         current = heapq.heappop(open_set)[1]
-        i = i+1
+        i += 1
         cv2.circle(img, current, 1, (0, 255, 0), -1)
 
         if current == goal:
@@ -77,7 +80,7 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
             path.append(start)
             cv2.imshow("ASTAR LOOKUP", img)
             cv2.waitKey(1)
-            print(i)
+            print(f"Nodes expanded: {i}")
             return path[::-1]
 
         neighbors = [
@@ -99,8 +102,7 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
                 move_cost += cost_mask[neighbor[1], neighbor[0]]
 
                 # Penalize unsafe areas instead of skipping
-                if unsafe_mask[neighbor[1], neighbor[0]]:
-                    move_cost += 10
+                move_cost += 50 if unsafe_mask[neighbor[1], neighbor[0]] else 0
 
                 tentative_g_score = g_score[current] + move_cost
 
