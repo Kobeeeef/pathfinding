@@ -3,8 +3,9 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 import math
 import matplotlib.pyplot as plt
-
-
+import cv2
+MAP_X_SIZE = 1654  # map width (in cm)
+MAP_Y_SIZE = 821  # map height (in cm)
 # Heuristic function for A* (diagonal distance)
 def heuristic(a, b):
     D = 1
@@ -36,8 +37,19 @@ def precompute_safe_zones(obstacles, dynamic_obstacles, map_size_x, map_size_y, 
     return unsafe_mask, cost_mask
 
 
+background_img = cv2.imread("map.png")
+if background_img is not None:
+    background_img = cv2.resize(background_img, (MAP_X_SIZE, MAP_Y_SIZE))
+else:
+    print("\033[91mError: Background image not found!\033[0m")
+    background_img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255
+
+img = background_img.copy()
+
+
 # A* search algorithm
 def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
+    img = background_img.copy()
     map_size_y, map_size_x = unsafe_mask.shape
     open_set = []
     heapq.heappush(open_set, (0, start))
@@ -51,9 +63,11 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
     if 0 <= goal[0] < map_size_x and 0 <= goal[1] < map_size_y:
         unsafe_mask[goal[1], goal[0]] = False
         cost_mask[goal[1], goal[0]] = 0
-
+    i = 0
     while open_set:
         current = heapq.heappop(open_set)[1]
+        i = i+1
+        cv2.circle(img, current, 1, (0, 255, 0), -1)
 
         if current == goal:
             path = []
@@ -61,6 +75,9 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
                 path.append(current)
                 current = came_from[current]
             path.append(start)
+            cv2.imshow("ASTAR LOOKUP", img)
+            cv2.waitKey(1)
+            print(i)
             return path[::-1]
 
         neighbors = [
@@ -108,7 +125,7 @@ def generate_waypoints(path, n):
         # Calculate Euclidean distance between consecutive points
         dx = path[i][0] - path[i - 1][0]
         dy = path[i][1] - path[i - 1][1]
-        distance = math.sqrt(dx**2 + dy**2)
+        distance = math.sqrt(dx ** 2 + dy ** 2)
         accumulated_distance += distance
 
         # Check for inflection points by comparing slopes of consecutive segments
@@ -149,6 +166,3 @@ def debug_visualize_masks(unsafe_mask, cost_mask):
     plt.imshow(cost_mask, cmap='hot')
     plt.colorbar()
     plt.show()
-
-
-
