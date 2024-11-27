@@ -83,7 +83,7 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
 
                 # Penalize unsafe areas instead of skipping
                 if unsafe_mask[neighbor[1], neighbor[0]]:
-                    move_cost += 1000
+                    move_cost += 10
 
                 tentative_g_score = g_score[current] + move_cost
 
