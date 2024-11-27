@@ -11,8 +11,8 @@ MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
 ROBOT_SIZE = 77  # safe distance around obstacles (in cm)
 
-xbot = (336, 674)
-goal = (1403, 280)
+xbot = None
+goal = None
 
 path = None
 waypoints = None
@@ -45,7 +45,7 @@ COLOR_BLUE = "\033[94m"
 COLOR_RESET = "\033[0m"
 SEPARATOR = f"{COLOR_BLUE}{'=' * 50}{COLOR_RESET}"
 
-
+full_screen = False
 def log_message(message, color=COLOR_RESET):
     print(f"{color}{message}{COLOR_RESET}")
 
@@ -233,7 +233,7 @@ def select_position(event, x, y, flags, param):
 
 
 def handle_keypress(key):
-    global xbot, demo_running, robot_cursor_velocity, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots, \
+    global xbot, full_screen, demo_running, robot_cursor_velocity, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots, \
         prev_robot_cursor_time, prev_robot_cursor_position, xbot_velocity, prev_xbot_position, prev_xbot_time
 
     if key == ord('x'):
@@ -266,6 +266,18 @@ def handle_keypress(key):
         cv2.setMouseCallback("Path Planning", select_position, 'G')
     elif key == ord('q'):
         exit(0)
+    elif key == ord('s'):
+        if full_screen:
+            cv2.destroyWindow("Path Planning")
+            cv2.imshow("Path Planning", img)
+            full_screen = False
+        else:
+            cv2.destroyWindow("Path Planning")
+            cv2.namedWindow("Path Planning", cv2.WINDOW_NORMAL)
+            cv2.setWindowProperty("Path Planning", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            cv2.imshow("Path Planning", img)
+            full_screen = True
+
     elif key == ord('o'):
         log_message(SEPARATOR)
         log_message("Click to add obstacles.", COLOR_BLUE)
@@ -424,8 +436,7 @@ def handle_keypress(key):
 
 def run_demo():
     global robot_cursor_velocity
-    # cv2.namedWindow("Path Planning", cv2.WINDOW_NORMAL)
-    # cv2.setWindowProperty("Path Planning", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
     cv2.imshow("Path Planning", img)
 
     while True:
@@ -459,6 +470,7 @@ if __name__ == "__main__":
     log_message("- Press 'p' to plan the path", COLOR_YELLOW)
     log_message("- Press 'a' to add or move robots", COLOR_YELLOW)
     log_message("- Press 'f' to play the demo", COLOR_YELLOW)
+    log_message("- Press 's' to toggle fullscreen", COLOR_YELLOW)
     log_message("- Press 'c' to clear the map", COLOR_YELLOW)
     log_message("- Press 'q' to quit", COLOR_YELLOW)
     log_message(SEPARATOR)
