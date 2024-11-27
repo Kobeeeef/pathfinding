@@ -462,7 +462,8 @@ def run_demo():
 
 if __name__ == "__main__":
     load_static_obstacles()
-    log_message("Welcome to the Path Planning Demo!", COLOR_BLUE)
+    log_message(SEPARATOR)
+    log_message("Welcome to the Path Planning Demo by Kobe!", COLOR_BLUE)
     log_message("Instructions:", COLOR_YELLOW)
     log_message("- Press 'x' to set XBOT position", COLOR_YELLOW)
     log_message("- Press 'g' to set Goal position", COLOR_YELLOW)
