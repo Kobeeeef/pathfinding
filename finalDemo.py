@@ -9,7 +9,7 @@ import astar
 # Constants for map size (in centimeters)
 MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
-ROBOT_SIZE = 72  # safe distance around obstacles (in cm)
+ROBOT_SIZE = 43  # safe distance around obstacles (in cm)
 
 xbot = None
 goal = None
@@ -28,7 +28,7 @@ robot_cursor_angle = None
 robot_cursor_velocity = 0
 placing_robot = False
 opponent_robots = []
-
+demo_running = False
 background_img = cv2.imread("map.png")
 if background_img is not None:
     background_img = cv2.resize(background_img, (MAP_X_SIZE, MAP_Y_SIZE))
@@ -233,7 +233,7 @@ def select_position(event, x, y, flags, param):
 
 
 def handle_keypress(key):
-    global xbot, robot_cursor_velocity, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots, \
+    global xbot, demo_running, robot_cursor_velocity, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots, \
         prev_robot_cursor_time, prev_robot_cursor_position, xbot_velocity, prev_xbot_position, prev_xbot_time
 
     if key == ord('x'):
@@ -281,7 +281,7 @@ def handle_keypress(key):
         log_message(SEPARATOR)
 
         current = 0
-        demo_running = True  # Start demo loop
+        demo_running = True
         flag = False
         copy_path = path.copy()
         while demo_running:
@@ -307,6 +307,9 @@ def handle_keypress(key):
                     flag = False
 
             else:
+                if not path:
+                    demo_running = False
+                    continue
                 copy_path = path.copy()
                 current = 0
             xbot = path[current]
@@ -403,6 +406,7 @@ def handle_keypress(key):
 
     elif key == ord('c'):
         log_message("Clearing the map...", COLOR_YELLOW)
+        demo_running = False
         xbot = None
         goal = None
         path = None
