@@ -139,7 +139,7 @@ def place_path():
         for step in path:
             cv2.circle(img, step, 1, (255, 0, 0), -1)
         for point in waypoints:
-            cv2.circle(img, point, 3, (0, 255, 255), -1)
+            cv2.circle(img, point, 4, (0, 255, 255), 2)
 
 
 def collision_detected():
@@ -368,7 +368,7 @@ def handle_keypress(key):
             for step in path:
                 cv2.circle(img, step, 1, (255, 0, 0), -1)  # Red path points
             for point in waypoints:
-                cv2.circle(img, point, 3, (0, 255, 255), -1)  # Yellow for adjusted waypoints
+                cv2.circle(img, point, 4, (0, 255, 255), 2)
 
             cv2.imshow("Path Planning", img)
 
@@ -412,7 +412,7 @@ def handle_keypress(key):
             for step in path:
                 cv2.circle(img, step, 1, (255, 0, 0), -1)
             for point in waypoints:
-                cv2.circle(img, point, 3, (0, 255, 255), -1)
+                cv2.circle(img, point, 4, (0, 255, 255), 2)
 
         else:
             log_message("Please set XBOT and Goal positions first!", COLOR_RED)
