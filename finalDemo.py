@@ -10,7 +10,7 @@ import astar
 MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
 ROBOT_SIZE = 72  # safe distance around obstacles (in cm)
-
+SMOOTH_ANGLE_STEP_SIZE = 1.65
 xbot = None
 goal = None
 
@@ -70,16 +70,35 @@ def load_static_obstacles(filename="obstacles.json"):
         print(f"Error: Failed to decode the file {filename}.")
 
 
-def add(angle=0):
-    if xbot:
+# ---------- SMOOTH ANGLE TRANSITION ----------
+current_angle = 0
 
+
+def smooth_angle_update(target_angle, current_angle, step_size=SMOOTH_ANGLE_STEP_SIZE):
+    if abs(target_angle - current_angle) <= step_size:
+        return target_angle
+    elif target_angle > current_angle:
+        return current_angle + step_size
+    else:
+        return current_angle - step_size
+
+
+# ---------- SMOOTH ANGLE TRANSITION ----------
+
+def add(angle=0):
+    global current_angle
+
+    # Smoothly update the current angle towards the desired angle
+    current_angle = smooth_angle_update(angle, current_angle)
+
+    if xbot:
         cv2.circle(img, xbot, 2, (0, 255, 0), -1)
         if xbot_velocity > 0:
             cv2.putText(img, f"{xbot_velocity:.2f} cm/s",
-                        (xbot[0] - 30, xbot[1] - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                        (xbot[0] - 40, xbot[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                         (0, 0, 0), 2)
 
-        box = cv2.boxPoints(((xbot[0], xbot[1]), (ROBOT_SIZE, ROBOT_SIZE), angle))
+        box = cv2.boxPoints(((xbot[0], xbot[1]), (ROBOT_SIZE, ROBOT_SIZE), current_angle))
         box = np.int32(box)
 
         cv2.polylines(img, [box], True, (255, 100, 0), 2)
@@ -407,7 +426,7 @@ def handle_keypress(key):
 
             if xbot_velocity > 0:
                 cv2.putText(img, f"{xbot_velocity:.2f} cm/s",
-                            (xbot[0] - 30, xbot[1] - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                            (xbot[0] - 40, xbot[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
                             (0, 0, 0), 2)
 
             # Draw waypoints and path
