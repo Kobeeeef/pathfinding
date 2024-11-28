@@ -439,7 +439,7 @@ def handle_keypress(key):
             # Predict dynamic obstacle conflicts and warp path
 
             predicted_path_obstacles = astar.predict_collisions(
-                [(robot_cursor_position, robot_cursor_velocity, robot_cursor_angle)], path, ROBOT_SIZE * 2)
+                [(robot_cursor_position, robot_cursor_velocity, robot_cursor_angle)], path, ROBOT_SIZE * 2.2)
 
             # conflicts = astar.detect_obstacle_conflicts(path, predicted_obstacles, SAFE_DISTANCE)
             #
@@ -478,11 +478,14 @@ def handle_keypress(key):
                     cv2.circle(img, path[i], 1, (0, 0, 255), -1)
 
             # dynamic local window size
-            box = cv2.boxPoints(((xbot[0], xbot[1]),
-                                 ((ROBOT_SIZE * 2) + (xbot_velocity / 2), (ROBOT_SIZE * 2) + (xbot_velocity / 2)),
-                                 current_angle))
-            box = np.int32(box)
-            cv2.polylines(img, [box], True, (0, 50, 255), 2)
+            points = astar.calculate_dynamic_window(
+                xbot=xbot,
+                velocity=xbot_velocity,
+                robot_size=ROBOT_SIZE * 2,
+                map_x_size=MAP_X_SIZE,
+                map_y_size=MAP_Y_SIZE
+            )
+            cv2.polylines(img, [points], True, (0, 50, 255), 2)
 
             # Display velocity
             if xbot_velocity > 0:

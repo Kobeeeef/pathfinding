@@ -197,6 +197,47 @@ def debug_visualize_masks(unsafe_mask, cost_mask):
     plt.show()
 
 
+def calculate_dynamic_window(xbot, velocity, robot_size, map_x_size, map_y_size):
+    """
+    Dynamically calculates and draws a square around the robot that adjusts to fit within the map boundaries.
+
+    Args:
+        xbot: Tuple (x, y) representing the robot's current position.
+        velocity: The robot's current velocity.
+        robot_size: Size of the robot (radius or half-size for the bounding square).
+        map_x_size: Width of the map.
+        map_y_size: Height of the map.
+
+    Returns:
+        The points of the dynamically adjusted square around the robot.
+    """
+    # Define the maximum side length of the square
+    max_side_length = (robot_size * 2) + velocity / 2
+
+    # Calculate the half side length
+    half_side = max_side_length / 2
+
+    # Determine boundaries to prevent the square from going out of the map
+    left = max(xbot[0] - half_side, 0)
+    right = min(xbot[0] + half_side, map_x_size)
+    top = max(xbot[1] - half_side, 0)
+    bottom = min(xbot[1] + half_side, map_y_size)
+
+    # Adjust the square dimensions if close to boundaries
+    adjusted_width = right - left
+    adjusted_height = bottom - top
+
+    # Create the square as a list of points
+    square_points = [
+        (int(left), int(top)),
+        (int(right), int(top)),
+        (int(right), int(bottom)),
+        (int(left), int(bottom))
+    ]
+
+    return np.array(square_points, dtype=np.int32)
+
+
 def predict_collisions(opponents, path, safe_distance):
     """
     Predicts potential collisions between the robot path and opponents' robots.
@@ -239,9 +280,3 @@ def predict_collisions(opponents, path, safe_distance):
     conflicts = list(set(conflicts))
 
     return conflicts
-
-
-
-
-
-
