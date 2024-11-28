@@ -49,9 +49,9 @@ full_screen = False
 
 unsafe_mask, cost_mask = (None, None)
 
-
 BLUE_SCORING = (1523, 556)
 RED_SCORING = (127, 556)
+
 
 def log_message(message, color=COLOR_RESET):
     print(f"{color}{message}{COLOR_RESET}")
@@ -390,13 +390,14 @@ def handle_keypress(key):
             return
 
         log_message(SEPARATOR)
-        log_message("Running demo...", COLOR_BLUE)
+        log_message("Running demo with dynamic warping...", COLOR_BLUE)
         log_message(SEPARATOR)
 
         current = 0
         demo_running = True
         flag = False
         copy_path = path.copy()
+
         while demo_running:
             key = cv2.waitKey(1)
 
@@ -408,6 +409,8 @@ def handle_keypress(key):
                 place_path()
                 cv2.imshow("Path Planning", img)
                 cv2.waitKey(1)
+
+            # Dynamic path update check
             if copy_path == path and not flag:
                 if current >= len(path):
                     flag = True
@@ -427,12 +430,20 @@ def handle_keypress(key):
 
             xbot = path[current]
 
-            if placing_robot:
-                reset_map()
-                place_path()
-                if prev_robot_cursor_position == robot_cursor_position and (
-                        time.time() - (prev_robot_cursor_time or 0)) > 0.3:
-                    robot_cursor_velocity = 0
+            # Predict dynamic obstacle conflicts and warp path
+
+            predicted_obstacles = astar.predict_collisions(
+                [(robot_cursor_position, robot_cursor_velocity, robot_cursor_angle)], path, ROBOT_SIZE)
+
+            # conflicts = astar.detect_obstacle_conflicts(path, predicted_obstacles, SAFE_DISTANCE)
+            #
+            # if conflicts:
+            #     path = astar.warp_path(path, conflicts, MAP_X_SIZE, MAP_Y_SIZE, SAFE_DISTANCE)
+            #     path = astar.smooth_path(path)  # Smooth the new warped path
+            #     copy_path = path.copy()
+            #     log_message("Path dynamically warped to avoid obstacles.", COLOR_YELLOW)
+
+            # Update robot velocity
             if prev_xbot_position is not None and prev_xbot_time is not None:
                 time_diff = time.time() - prev_xbot_time
                 distance = np.sqrt((xbot[0] - prev_xbot_position[0]) ** 2 + (xbot[1] - prev_xbot_position[1]) ** 2)
@@ -445,6 +456,7 @@ def handle_keypress(key):
             prev_xbot_position = xbot
             prev_xbot_time = time.time()
 
+            # Calculate angle to next point
             if current < len(path) - 1:
                 next_point = path[current + 1]
                 dx = next_point[0] - xbot[0]
@@ -455,7 +467,10 @@ def handle_keypress(key):
 
             reset_map()
             add(angle)
+            for i in predicted_obstacles:
+                cv2.circle(img, path[i], 1, (255, 0, 255), -1)  # Red path points
 
+            # Display velocity
             if xbot_velocity > 0:
                 cv2.putText(img, f"{xbot_velocity:.2f} cm/s",
                             (xbot[0] - 40, xbot[1] - 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
@@ -470,10 +485,11 @@ def handle_keypress(key):
 
             cv2.imshow("Path Planning", img)
             current += 1
+
         xbot_velocity = 0
         log_message("Demo finished.", COLOR_BLUE)
-
         log_message(SEPARATOR)
+
 
 
     elif key == ord('p'):

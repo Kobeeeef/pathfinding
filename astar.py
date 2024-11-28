@@ -104,8 +104,8 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
                 path.append(current)
                 current = came_from[current]
             path.append(start)
-            cv2.imshow("ASTAR LOOKUP", img)
-            cv2.waitKey(1)
+            # cv2.imshow("ASTAR LOOKUP", img)
+            # cv2.waitKey(1)
             print(f"Nodes expanded: {node_expansion_count}")
             return path[::-1]
 
@@ -195,3 +195,46 @@ def debug_visualize_masks(unsafe_mask, cost_mask):
     plt.imshow(cost_mask, cmap='hot')
     plt.colorbar()
     plt.show()
+
+
+def predict_collisions(opponents, path, safe_distance):
+    """
+    Predicts potential collisions between the robot path and opponents' robots.
+
+    Args:
+        opponents: List of tuples, each containing:
+            - opponent_position: Tuple (x, y) representing the current position of an opponent robot.
+            - opponent_velocity: Scalar representing the velocity of the opponent robot.
+            - opponent_angle: Angle in radians representing the direction of the opponent robot's movement.
+        path: List of (x, y) points representing the planned path of the robot.
+        safe_distance: Minimum distance to maintain between the robot path and the opponent robots.
+
+    Returns:
+        List of path indices where potential collisions are predicted.
+    """
+    conflicts = []
+
+    # Loop through each opponent
+    for opponent_position, opponent_velocity, opponent_angle in opponents:
+        # Predict the opponent's next position based on their velocity and direction
+        predicted_opponent_position = (
+            opponent_position[0] + opponent_velocity * np.cos(opponent_angle),
+            opponent_position[1] + opponent_velocity * np.sin(opponent_angle)
+        )
+
+        # Check each path point for potential collision
+        for i, point in enumerate(path):
+            # Calculate the distance from the predicted opponent position to the path point
+            distance_to_opponent = np.linalg.norm(np.array(point) - np.array(predicted_opponent_position))
+            if distance_to_opponent <= safe_distance:
+                conflicts.append(i)
+
+    # Remove duplicates in case of overlapping conflicts
+    conflicts = list(set(conflicts))
+
+    return conflicts
+
+
+
+
+
