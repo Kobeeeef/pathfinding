@@ -6,18 +6,48 @@ import matplotlib.pyplot as plt
 import cv2
 
 # Map dimensions
-MAP_X_SIZE = 1654  # map width (in cm)
-MAP_Y_SIZE = 821  # map height (in cm)
+MAP_X_SIZE = 1654  # Map width (in cm)
+MAP_Y_SIZE = 821  # Map height (in cm)
 
+# Heuristic weight
 PRIORITIZE_GOAL_WEIGHT = 30
+
+# Safe zone parameters
+SAFE_DISTANCE = 10  # Distance to maintain from obstacles (in cm)
+UNSAFE_AREA_PENALTY = 50  # Penalty for unsafe zones
+DYNAMIC_OBSTACLE_PENALTY = 1.2  # Multiplier for dynamic obstacle cost
+
+# Visualization settings
+NODE_DRAW_COLOR = (0, 255, 0)  # Color for nodes being visualized
+NODE_DRAW_RADIUS = 1  # Radius for drawing nodes
+
+# Path generation parameters
+INFLECTION_ANGLE_THRESHOLD = math.pi / 6  # Minimum angle to detect inflection points (radians)
+
+# Load background image
+background_img = cv2.imread("map.png")
+if background_img is not None:
+    background_img = cv2.resize(background_img, (MAP_X_SIZE, MAP_Y_SIZE))
+else:
+    print("\033[91mError: Background image not found!\033[0m")
+    background_img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255
+
+img = background_img.copy()
 
 
 def heuristic(a, b):
-    return PRIORITIZE_GOAL_WEIGHT * (abs(a[0] - b[0]) + abs(a[1] - b[1]))
+    """
+    Calculates the heuristic for A* using a weighted Manhattan distance.
+    """
+    dx = abs(a[0] - b[0])
+    dy = abs(a[1] - b[1])
+    return PRIORITIZE_GOAL_WEIGHT * (dx + dy) + (1.414 - 2) * min(dx, dy)
 
 
-# Precompute unsafe zones and cost mask
 def precompute_safe_zones(obstacles, dynamic_obstacles, map_size_x, map_size_y, safe_distance):
+    """
+    Precomputes the unsafe zones and their associated costs.
+    """
     grid = np.zeros((map_size_y, map_size_x), dtype=bool)
 
     # Mark static obstacles
@@ -38,19 +68,10 @@ def precompute_safe_zones(obstacles, dynamic_obstacles, map_size_x, map_size_y, 
     return unsafe_mask, cost_mask
 
 
-# Load background map
-background_img = cv2.imread("map.png")
-if background_img is not None:
-    background_img = cv2.resize(background_img, (MAP_X_SIZE, MAP_Y_SIZE))
-else:
-    print("\033[91mError: Background image not found!\033[0m")
-    background_img = np.ones((MAP_Y_SIZE, MAP_X_SIZE, 3), dtype=np.uint8) * 255
-
-img = background_img.copy()
-
-
-# A* search algorithm
 def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
+    """
+    A* search algorithm with additional penalties for unsafe zones and dynamic obstacles.
+    """
     img = background_img.copy()
     map_size_y, map_size_x = unsafe_mask.shape
     open_set = []
@@ -66,11 +87,16 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
         unsafe_mask[goal[1], goal[0]] = False
         cost_mask[goal[1], goal[0]] = 0
 
-    i = 0
+    node_expansion_count = 0
+    closed_set = set()
+
     while open_set:
         current = heapq.heappop(open_set)[1]
-        i += 1
-        cv2.circle(img, current, 1, (0, 255, 0), -1)
+        node_expansion_count += 1
+        cv2.circle(img, current, NODE_DRAW_RADIUS, NODE_DRAW_COLOR, -1)
+        if current in closed_set:
+            continue
+        closed_set.add(current)
 
         if current == goal:
             path = []
@@ -80,7 +106,7 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
             path.append(start)
             cv2.imshow("ASTAR LOOKUP", img)
             cv2.waitKey(1)
-            print(f"Nodes expanded: {i}")
+            print(f"Nodes expanded: {node_expansion_count}")
             return path[::-1]
 
         neighbors = [
@@ -96,13 +122,13 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
 
                 # Dynamic obstacle cost penalty
                 if neighbor in dynamic_set:
-                    move_cost *= 1.2  # Adjusted dynamic obstacle penalty
+                    move_cost *= DYNAMIC_OBSTACLE_PENALTY
 
                 # Add cost from cost mask
                 move_cost += cost_mask[neighbor[1], neighbor[0]]
 
                 # Penalize unsafe areas instead of skipping
-                move_cost += 50 if unsafe_mask[neighbor[1], neighbor[0]] else 0
+                move_cost += UNSAFE_AREA_PENALTY if unsafe_mask[neighbor[1], neighbor[0]] else 0
 
                 tentative_g_score = g_score[current] + move_cost
 
@@ -115,8 +141,10 @@ def a_star_search(start, goal, unsafe_mask, cost_mask, dynamic_obstacles):
     return None
 
 
-# Generate waypoints every nth cm along the path
-def generate_waypoints(path, n):
+def generate_waypoints(path, waypoint_interval):
+    """
+    Generates waypoints along the path at regular intervals or at inflection points.
+    """
     if not path or len(path) < 2:
         raise ValueError("Path must contain at least two points (start and goal).")
 
@@ -124,29 +152,26 @@ def generate_waypoints(path, n):
     accumulated_distance = 0
 
     for i in range(1, len(path) - 1):
-        # Calculate Euclidean distance between consecutive points
         dx = path[i][0] - path[i - 1][0]
         dy = path[i][1] - path[i - 1][1]
         distance = math.sqrt(dx ** 2 + dy ** 2)
         accumulated_distance += distance
 
-        # Check for inflection points by comparing slopes of consecutive segments
         prev_dx = path[i][0] - path[i - 1][0]
         prev_dy = path[i][1] - path[i - 1][1]
         curr_dx = path[i + 1][0] - path[i][0]
         curr_dy = path[i + 1][1] - path[i][1]
 
-        # Calculate slopes
         prev_slope = math.atan2(prev_dy, prev_dx)
         curr_slope = math.atan2(curr_dy, curr_dx)
 
         # Detect inflection points
-        if abs(curr_slope - prev_slope) > math.pi / 6:  # Threshold for a sharp turn
+        if abs(curr_slope - prev_slope) > INFLECTION_ANGLE_THRESHOLD:
             waypoints.append(path[i])
-            accumulated_distance = 0  # Reset accumulated distance after inflection
+            accumulated_distance = 0
 
         # Add waypoints at regular intervals
-        if accumulated_distance >= n:
+        if accumulated_distance >= waypoint_interval:
             waypoints.append(path[i])
             accumulated_distance = 0
 
@@ -157,8 +182,10 @@ def generate_waypoints(path, n):
     return waypoints
 
 
-# Debugging and Visualization
 def debug_visualize_masks(unsafe_mask, cost_mask):
+    """
+    Visualizes the unsafe and cost masks for debugging purposes.
+    """
     plt.title("Unsafe Mask")
     plt.imshow(unsafe_mask, cmap='gray')
     plt.colorbar()

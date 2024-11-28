@@ -10,7 +10,7 @@ import astar
 MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
 ROBOT_SIZE = 72  # safe distance around obstacles (in cm)
-SMOOTH_ANGLE_STEP_SIZE = 1.65
+SMOOTH_ANGLE_STEP_SIZE = 1.3
 xbot = None
 goal = None
 
@@ -44,7 +44,7 @@ COLOR_YELLOW = "\033[93m"
 COLOR_BLUE = "\033[94m"
 COLOR_RESET = "\033[0m"
 SEPARATOR = f"{COLOR_BLUE}{'=' * 50}{COLOR_RESET}"
-
+remove_path_visuals = True
 full_screen = False
 
 unsafe_mask, cost_mask = (None, None)
@@ -158,11 +158,12 @@ def mouse_movement(event, x, y, flags, param):
 
 def place_path():
     global path, waypoints
-    if path and waypoints:
-        for step in path:
-            cv2.circle(img, step, 1, (255, 0, 0), -1)
-        for point in waypoints:
-            cv2.circle(img, point, 4, (0, 255, 255), 2)
+    if not remove_path_visuals:
+        if path and waypoints:
+            for step in path:
+                cv2.circle(img, step, 1, (255, 0, 0), -1)
+            for point in waypoints:
+                cv2.circle(img, point, 4, (0, 255, 255), 2)
 
 
 def collision_detected():
@@ -285,20 +286,20 @@ def path_plan():
             return
         log_message(f"A* Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
         waypoints = astar.generate_waypoints(path, 800)
-        log_message(f"Path found: {path}", COLOR_GREEN)
-        log_message(f"Waypoints extracted: {waypoints}", COLOR_GREEN)
-
-        for step in path:
-            cv2.circle(img, step, 1, (255, 0, 0), -1)
-        for point in waypoints:
-            cv2.circle(img, point, 4, (0, 255, 255), 2)
+        log_message(f"Path: {path}", COLOR_GREEN)
+        log_message(f"Waypoints: {waypoints}", COLOR_GREEN)
+        if not remove_path_visuals:
+            for step in path:
+                cv2.circle(img, step, 1, (255, 0, 0), -1)
+            for point in waypoints:
+                cv2.circle(img, point, 4, (0, 255, 255), 2)
 
     else:
         log_message("Please set XBOT and Goal positions first!", COLOR_RED)
 
 
 def handle_keypress(key):
-    global xbot, full_screen, demo_running, robot_cursor_velocity, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots, \
+    global xbot, remove_path_visuals, full_screen, demo_running, robot_cursor_velocity, goal, img, path, obstacles, waypoints, placing_robot, robot_cursor_position, opponent_robots, \
         prev_robot_cursor_time, prev_robot_cursor_position, xbot_velocity, prev_xbot_position, prev_xbot_time
 
     if key == ord('x'):
@@ -329,12 +330,21 @@ def handle_keypress(key):
         log_message("Click to set the Goal position.", COLOR_BLUE)
         log_message(SEPARATOR)
         cv2.setMouseCallback("Path Planning", select_position, 'G')
+    elif key == ord('t'):
+        remove_path_visuals = not remove_path_visuals
+        log_message(SEPARATOR)
+        log_message(
+            "The path and waypoints are no longer shown." if remove_path_visuals else
+            "The path and waypoints are now shown.",
+            COLOR_BLUE)
+        log_message(SEPARATOR)
     elif key == ord('k'):
         log_message(SEPARATOR)
         log_message("Click to set the Goal position then Path Plan.", COLOR_BLUE)
         log_message(SEPARATOR)
         cv2.setMouseCallback("Path Planning", select_position, 'GP')
     elif key == ord('q'):
+        log_message("Exiting the program. Goodbye!", COLOR_RED)
         exit(0)
     elif key == ord('s'):
         if full_screen:
@@ -430,10 +440,11 @@ def handle_keypress(key):
                             (0, 0, 0), 2)
 
             # Draw waypoints and path
-            for step in path:
-                cv2.circle(img, step, 1, (255, 0, 0), -1)  # Red path points
-            for point in waypoints:
-                cv2.circle(img, point, 4, (0, 255, 255), 2)
+            if not remove_path_visuals:
+                for step in path:
+                    cv2.circle(img, step, 1, (255, 0, 0), -1)  # Red path points
+                for point in waypoints:
+                    cv2.circle(img, point, 4, (0, 255, 255), 2)
 
             cv2.imshow("Path Planning", img)
             current += 1
@@ -488,7 +499,7 @@ def run_demo():
             add(0)
         cv2.imshow("Path Planning", img)
         if key == ord('q'):
-            log_message("Exiting the program. Goodbye!", COLOR_GREEN)
+            log_message("Exiting the program. Goodbye!", COLOR_RED)
             break
     cv2.destroyAllWindows()
 
@@ -505,6 +516,7 @@ if __name__ == "__main__":
     log_message("- Press 'p' to plan the path", COLOR_YELLOW)
     log_message("- Press 'a' to add or move robots", COLOR_YELLOW)
     log_message("- Press 'f' to play the demo", COLOR_YELLOW)
+    log_message("- Press 't' to toggle path & waypoint visuals", COLOR_YELLOW)
     log_message("- Press 's' to toggle fullscreen", COLOR_YELLOW)
     log_message("- Press 'c' to clear the map", COLOR_YELLOW)
     log_message("- Press 'q' to quit", COLOR_YELLOW)
