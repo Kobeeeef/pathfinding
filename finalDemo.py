@@ -9,7 +9,7 @@ import astar
 # Constants for map size (in centimeters)
 MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
-ROBOT_SIZE = 77  # safe distance around obstacles (in cm)
+ROBOT_SIZE = 72  # safe distance around obstacles (in cm)
 
 xbot = None
 goal = None
@@ -46,6 +46,10 @@ COLOR_RESET = "\033[0m"
 SEPARATOR = f"{COLOR_BLUE}{'=' * 50}{COLOR_RESET}"
 
 full_screen = False
+
+unsafe_mask, cost_mask = (None, None)
+
+
 def log_message(message, color=COLOR_RESET):
     print(f"{color}{message}{COLOR_RESET}")
 
@@ -219,6 +223,13 @@ def select_position(event, x, y, flags, param):
             log_message(f"Goal set at position: ({x}, {y})", COLOR_GREEN)
             reset_map()
             add()
+    elif param == 'GP':
+        if event == cv2.EVENT_LBUTTONDOWN:
+            goal = (x, y)
+            log_message(f"Goal set at position: ({x}, {y})", COLOR_GREEN)
+            reset_map()
+            add()
+            path_plan()
 
     elif param == 'O':
         if event == cv2.EVENT_LBUTTONDOWN or (flags & cv2.EVENT_FLAG_LBUTTON):
@@ -230,6 +241,41 @@ def select_position(event, x, y, flags, param):
                     cv2.circle(img, (x, y), 2, (0, 0, 0), -1)
                 else:
                     log_message(f"Obstacle at ({x}, {y}) already exists.", COLOR_RED)
+
+
+def path_plan():
+    global path, waypoints
+    if xbot and goal:
+        if xbot == goal:
+            log_message("The XBOT and goal are the same!", COLOR_RED)
+            return
+        reset_map()
+        add()
+        log_message(SEPARATOR)
+        log_message("Planning path...", COLOR_YELLOW)
+        log_message(f"XBOT: {xbot}, Goal: {goal}", COLOR_GREEN)
+        # time_before = time.time()
+        #
+        # log_message(f"Precompute Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
+        # astar.debug_visualize_masks(unsafe_mask, cost_mask)
+
+        time_before = time.time()
+        path = astar.a_star_search(xbot, goal, unsafe_mask, cost_mask, obstacles + opponent_robots)
+        if path is None:
+            log_message("No path found!", COLOR_RED)
+            return
+        log_message(f"A* Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
+        waypoints = astar.generate_waypoints(path, 800)
+        log_message(f"Path found: {path}", COLOR_GREEN)
+        log_message(f"Waypoints extracted: {waypoints}", COLOR_GREEN)
+
+        for step in path:
+            cv2.circle(img, step, 1, (255, 0, 0), -1)
+        for point in waypoints:
+            cv2.circle(img, point, 4, (0, 255, 255), 2)
+
+    else:
+        log_message("Please set XBOT and Goal positions first!", COLOR_RED)
 
 
 def handle_keypress(key):
@@ -264,6 +310,11 @@ def handle_keypress(key):
         log_message("Click to set the Goal position.", COLOR_BLUE)
         log_message(SEPARATOR)
         cv2.setMouseCallback("Path Planning", select_position, 'G')
+    elif key == ord('k'):
+        log_message(SEPARATOR)
+        log_message("Click to set the Goal position then Path Plan.", COLOR_BLUE)
+        log_message(SEPARATOR)
+        cv2.setMouseCallback("Path Planning", select_position, 'GP')
     elif key == ord('q'):
         exit(0)
     elif key == ord('s'):
@@ -283,7 +334,7 @@ def handle_keypress(key):
         log_message("Click to add obstacles.", COLOR_BLUE)
         log_message(SEPARATOR)
         cv2.setMouseCallback("Path Planning", select_position, 'O')
-    elif key == ord('f'):  # 'f' key to start the demo
+    elif key == ord('f'):
         if path is None or waypoints is None:
             log_message("There is no path.", COLOR_RED)
             return
@@ -299,7 +350,6 @@ def handle_keypress(key):
         while demo_running:
             key = cv2.waitKey(1)
 
-            # Check if 'f' is pressed to toggle the demo
             if key == ord('f'):
                 demo_running = False  # Stop the demo
             elif handle_keypress(key):
@@ -326,7 +376,6 @@ def handle_keypress(key):
                 current = 0
             xbot = path[current]
 
-            # print(collision_detected())
             if placing_robot:
                 reset_map()
                 place_path()
@@ -345,7 +394,6 @@ def handle_keypress(key):
             prev_xbot_position = xbot
             prev_xbot_time = time.time()
 
-            # Calculate angle for the next waypoint
             if current < len(path) - 1:
                 next_point = path[current + 1]
                 dx = next_point[0] - xbot[0]
@@ -355,10 +403,8 @@ def handle_keypress(key):
                 angle = 0
 
             reset_map()
-
             add(angle)
 
-            # Show the robot's velocity
             if xbot_velocity > 0:
                 cv2.putText(img, f"{xbot_velocity:.2f} cm/s",
                             (xbot[0] - 30, xbot[1] - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
@@ -371,11 +417,7 @@ def handle_keypress(key):
                 cv2.circle(img, point, 4, (0, 255, 255), 2)
 
             cv2.imshow("Path Planning", img)
-
-            # Move to the next point in the path
             current += 1
-
-        # End the demo when path is completed or demo is stopped
         xbot_velocity = 0
         log_message("Demo finished.", COLOR_BLUE)
 
@@ -383,39 +425,7 @@ def handle_keypress(key):
 
 
     elif key == ord('p'):
-        if xbot and goal:
-            if xbot == goal:
-                log_message("The XBOT and goal are the same!", COLOR_RED)
-                return
-            reset_map()
-            add()
-            log_message(SEPARATOR)
-            log_message("Planning path...", COLOR_YELLOW)
-            log_message(f"XBOT: {xbot}, Goal: {goal}", COLOR_GREEN)
-            time_before = time.time()
-            unsafe_mask, cost_mask = astar.precompute_safe_zones(static_obstacles, obstacles + opponent_robots,
-                                                                 MAP_X_SIZE,
-                                                                 MAP_Y_SIZE, ROBOT_SIZE)
-            log_message(f"Precompute Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
-            #astar.debug_visualize_masks(unsafe_mask, cost_mask)
-
-            time_before = time.time()
-            path = astar.a_star_search(xbot, goal, unsafe_mask, cost_mask, obstacles + opponent_robots)
-            if path is None:
-                log_message("No path found!", COLOR_RED)
-                return
-            log_message(f"A* Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
-            waypoints = astar.generate_waypoints(path, 500)
-            log_message(f"Path found: {path}", COLOR_GREEN)
-            log_message(f"Waypoints extracted: {waypoints}", COLOR_GREEN)
-
-            for step in path:
-                cv2.circle(img, step, 1, (255, 0, 0), -1)
-            for point in waypoints:
-                cv2.circle(img, point, 4, (0, 255, 255), 2)
-
-        else:
-            log_message("Please set XBOT and Goal positions first!", COLOR_RED)
+        path_plan()
 
     elif key == ord('c'):
         log_message("Clearing the map...", COLOR_YELLOW)
@@ -435,8 +445,12 @@ def handle_keypress(key):
 
 
 def run_demo():
-    global robot_cursor_velocity
-
+    global robot_cursor_velocity, unsafe_mask, cost_mask
+    time_before = time.time()
+    unsafe_mask, cost_mask = astar.precompute_safe_zones(static_obstacles, obstacles + opponent_robots,
+                                                         MAP_X_SIZE,
+                                                         MAP_Y_SIZE, ROBOT_SIZE)
+    log_message(f"Precompute Time: {(time.time() - time_before):.2f}s", COLOR_GREEN)
     cv2.imshow("Path Planning", img)
 
     while True:
@@ -467,6 +481,7 @@ if __name__ == "__main__":
     log_message("Instructions:", COLOR_YELLOW)
     log_message("- Press 'x' to set XBOT position", COLOR_YELLOW)
     log_message("- Press 'g' to set Goal position", COLOR_YELLOW)
+    log_message("- Press 'k' to set Goal position & Plan", COLOR_YELLOW)
     log_message("- Press 'o' to add obstacles", COLOR_YELLOW)
     log_message("- Press 'p' to plan the path", COLOR_YELLOW)
     log_message("- Press 'a' to add or move robots", COLOR_YELLOW)
