@@ -216,15 +216,21 @@ def predict_collisions(opponents, path, safe_distance):
 
     # Loop through each opponent
     for opponent_position, opponent_velocity, opponent_angle in opponents:
+        if not opponent_angle or not opponent_position:
+            continue
         # Predict the opponent's next position based on their velocity and direction
-        predicted_opponent_position = (
-            opponent_position[0] + opponent_velocity * np.cos(opponent_angle),
-            opponent_position[1] + opponent_velocity * np.sin(opponent_angle)
-        )
+        if opponent_velocity > 0:
+            predicted_opponent_position = (
+                opponent_position[0] + opponent_velocity * np.cos(opponent_angle),
+                opponent_position[1] + opponent_velocity * np.sin(opponent_angle)
+            )
+        else:
+            # For stationary robots, use their current position
+            predicted_opponent_position = opponent_position
 
         # Check each path point for potential collision
         for i, point in enumerate(path):
-            # Calculate the distance from the predicted opponent position to the path point
+            # Calculate the distance from the opponent position to the path point
             distance_to_opponent = np.linalg.norm(np.array(point) - np.array(predicted_opponent_position))
             if distance_to_opponent <= safe_distance:
                 conflicts.append(i)
@@ -233,6 +239,7 @@ def predict_collisions(opponents, path, safe_distance):
     conflicts = list(set(conflicts))
 
     return conflicts
+
 
 
 

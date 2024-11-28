@@ -146,10 +146,12 @@ def mouse_movement(event, x, y, flags, param):
 
         if prev_robot_cursor_position is not None and prev_robot_cursor_time is not None:
             time_diff = time.time() - prev_robot_cursor_time
-
+            if time_diff < 0.1:
+                return
             distance = np.sqrt((x - prev_robot_cursor_position[0]) ** 2 + (y - prev_robot_cursor_position[1]) ** 2)
             if time_diff != 0:
                 robot_cursor_velocity = distance / time_diff
+
             dx = x - prev_robot_cursor_position[0]
             dy = y - prev_robot_cursor_position[1]
 
@@ -426,14 +428,18 @@ def handle_keypress(key):
                     continue
                 else:
                     xbot_velocity = 0
+                    reset_map()
+                    add(0)
+                    place_path()
+                    cv2.imshow("Path Planning", img)
                     continue
 
             xbot = path[current]
 
             # Predict dynamic obstacle conflicts and warp path
 
-            predicted_obstacles = astar.predict_collisions(
-                [(robot_cursor_position, robot_cursor_velocity, robot_cursor_angle)], path, ROBOT_SIZE)
+            predicted_path_obstacles = astar.predict_collisions(
+                [(robot_cursor_position, robot_cursor_velocity, robot_cursor_angle)], path, ROBOT_SIZE * 2)
 
             # conflicts = astar.detect_obstacle_conflicts(path, predicted_obstacles, SAFE_DISTANCE)
             #
@@ -467,8 +473,16 @@ def handle_keypress(key):
 
             reset_map()
             add(angle)
-            for i in predicted_obstacles:
-                cv2.circle(img, path[i], 1, (255, 0, 255), -1)  # Red path points
+            for i in predicted_path_obstacles:
+                if i >= current:
+                    cv2.circle(img, path[i], 1, (0, 0, 255), -1)
+
+            # dynamic local window size
+            box = cv2.boxPoints(((xbot[0], xbot[1]),
+                                 ((ROBOT_SIZE * 2) + (xbot_velocity / 2), (ROBOT_SIZE * 2) + (xbot_velocity / 2)),
+                                 current_angle))
+            box = np.int32(box)
+            cv2.polylines(img, [box], True, (0, 50, 255), 2)
 
             # Display velocity
             if xbot_velocity > 0:
@@ -527,8 +541,8 @@ def run_demo():
         if placing_robot:
             reset_map()
             place_path()
-            if prev_robot_cursor_position == robot_cursor_position and (
-                    time.time() - (prev_robot_cursor_time or 0)) > 0.3:
+            if (
+                    time.time() - (prev_robot_cursor_time or 0)) > 0.15:
                 robot_cursor_velocity = 0
             add()
         if xbot_velocity == 0:
