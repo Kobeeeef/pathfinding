@@ -9,7 +9,7 @@ import astar
 # Constants for map size (in centimeters)
 MAP_X_SIZE = 1654  # map width (in cm)
 MAP_Y_SIZE = 821  # map height (in cm)
-ROBOT_SIZE = 72  # safe distance around obstacles (in cm)
+ROBOT_SIZE = 80  # safe distance around obstacles (in cm) MINIMUM 15
 SMOOTH_ANGLE_STEP_SIZE = 1.3
 xbot = None
 goal = None
@@ -49,6 +49,9 @@ full_screen = False
 
 unsafe_mask, cost_mask = (None, None)
 
+
+BLUE_SCORING = (1523, 556)
+RED_SCORING = (127, 556)
 
 def log_message(message, color=COLOR_RESET):
     print(f"{color}{message}{COLOR_RESET}")
@@ -343,6 +346,24 @@ def handle_keypress(key):
         log_message("Click to set the Goal position then Path Plan.", COLOR_BLUE)
         log_message(SEPARATOR)
         cv2.setMouseCallback("Path Planning", select_position, 'GP')
+    elif key == ord('r'):
+        if demo_running:
+            goal = RED_SCORING
+            log_message(SEPARATOR)
+            log_message("Returning to red speaker...", COLOR_BLUE)
+            log_message(SEPARATOR)
+            path_plan()
+        else:
+            log_message("The demo is not running.", COLOR_RED)
+    elif key == ord('b'):
+        if demo_running:
+            goal = BLUE_SCORING
+            log_message(SEPARATOR)
+            log_message("Returning to blue speaker...", COLOR_BLUE)
+            log_message(SEPARATOR)
+            path_plan()
+        else:
+            log_message("The demo is not running.", COLOR_RED)
     elif key == ord('q'):
         log_message("Exiting the program. Goodbye!", COLOR_RED)
         exit(0)
@@ -380,29 +401,30 @@ def handle_keypress(key):
             key = cv2.waitKey(1)
 
             if key == ord('f'):
-                demo_running = False  # Stop the demo
+                demo_running = False
             elif handle_keypress(key):
                 reset_map()
                 add(0)
                 place_path()
                 cv2.imshow("Path Planning", img)
                 cv2.waitKey(1)
-            if copy_path == path:
+            if copy_path == path and not flag:
                 if current >= len(path):
-                    current = 0
                     flag = True
                     continue
-
-                if flag:
-                    current = 0
-                    flag = False
-
             else:
                 if not path:
                     demo_running = False
                     continue
-                copy_path = path.copy()
-                current = 0
+                if path != copy_path:
+                    current = 0
+                    flag = False
+                    copy_path = path.copy()
+                    continue
+                else:
+                    xbot_velocity = 0
+                    continue
+
             xbot = path[current]
 
             if placing_robot:
@@ -519,6 +541,8 @@ if __name__ == "__main__":
     log_message("- Press 't' to toggle path & waypoint visuals", COLOR_YELLOW)
     log_message("- Press 's' to toggle fullscreen", COLOR_YELLOW)
     log_message("- Press 'c' to clear the map", COLOR_YELLOW)
+    log_message("- Press 'b' to go to blue speaker", COLOR_YELLOW)
+    log_message("- Press 'r' to go to red speaker", COLOR_YELLOW)
     log_message("- Press 'q' to quit", COLOR_YELLOW)
     log_message(SEPARATOR)
     run_demo()
