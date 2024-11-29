@@ -3,7 +3,7 @@ import time
 
 import cv2
 import numpy as np
-
+import copy
 import astar
 
 # Constants for map size (in centimeters)
@@ -171,56 +171,11 @@ def place_path():
                 cv2.circle(img, point, 4, (0, 255, 255), 2)
 
 
-def collision_detected():
-    global xbot, robot_cursor_position, robot_cursor_velocity, robot_cursor_angle
-    if robot_cursor_position and robot_cursor_velocity > 0:
 
-        future_x = robot_cursor_position[0] + robot_cursor_velocity * np.cos(np.radians(robot_cursor_angle))
-        future_y = robot_cursor_position[1] + robot_cursor_velocity * np.sin(np.radians(robot_cursor_angle))
-
-        distance = np.sqrt((xbot[0] - future_x) ** 2 + (xbot[1] - future_y) ** 2)
-        if distance < (ROBOT_SIZE * 2):
-            return True
-    return False
 
 
 # Function to adjust the path to avoid obstacles
-def adjust_path_around_obstacles(path):
-    global xbot, robot_cursor_position, robot_cursor_velocity, robot_cursor_angle, obstacles
 
-    # Check for collision and adjust the path if necessary
-    if collision_detected():
-        print("Collision detected! Adjusting path...")
-
-        adjusted_path = []
-
-        # For each segment in the path, check if it's close to an obstacle
-        for i in range(len(path) - 1):
-            current_point = path[i]
-            next_point = path[i + 1]
-
-            # Check if the path segment is close to an obstacle
-            for obs in obstacles:
-                obs_distance = np.sqrt((obs[0] - current_point[0]) ** 2 + (obs[1] - current_point[1]) ** 2)
-                if obs_distance < (ROBOT_SIZE * 3):  # If an obstacle is close to the path
-                    # Apply an offset to avoid the obstacle
-                    offset_angle = np.radians(45)  # Angle to steer around the obstacle
-                    offset_x = int(np.cos(offset_angle) * 20)  # Steer by 20 pixels
-                    offset_y = int(np.sin(offset_angle) * 20)
-
-                    # Add a new point to adjust the path around the obstacle
-                    adjusted_path.append((current_point[0] + offset_x, current_point[1] + offset_y))
-                    adjusted_path.append((next_point[0] + offset_x, next_point[1] + offset_y))
-
-                    # Skip the original path segment, as it's now adjusted
-                    break
-            else:
-                # If no obstacle was found, continue with the normal path segment
-                adjusted_path.append(current_point)
-
-        return adjusted_path  # Return the adjusted path
-
-    return path
 
 
 def reconstruct_full_path(local_path, window_min_x, window_min_y):
@@ -398,7 +353,7 @@ def handle_keypress(key):
         current = 0
         demo_running = True
         flag = False
-        copy_path = path.copy()
+        copy_goal = copy.copy(goal)
 
         while demo_running:
             key = cv2.waitKey(1)
@@ -410,10 +365,9 @@ def handle_keypress(key):
                 add(0)
                 place_path()
                 cv2.imshow("Path Planning", img)
-                cv2.waitKey(1)
 
             # Dynamic path update check
-            if copy_path == path and not flag:
+            if copy_goal == goal and not flag:
                 if current >= len(path):
                     flag = True
                     continue
@@ -421,10 +375,10 @@ def handle_keypress(key):
                 if not path:
                     demo_running = False
                     continue
-                if path != copy_path:
+                if goal != copy_goal:
                     current = 0
                     flag = False
-                    copy_path = path.copy()
+                    copy_goal = copy.copy(goal)
                     continue
                 else:
                     xbot_velocity = 0
@@ -434,22 +388,10 @@ def handle_keypress(key):
                     cv2.imshow("Path Planning", img)
                     continue
 
+            # Current robot position
             xbot = path[current]
 
             # Predict dynamic obstacle conflicts and warp path
-
-            predicted_path_obstacles = astar.predict_collisions(
-                [(robot_cursor_position, robot_cursor_velocity, robot_cursor_angle)], path, ROBOT_SIZE * 2.2)
-
-            # conflicts = astar.detect_obstacle_conflicts(path, predicted_obstacles, SAFE_DISTANCE)
-            #
-            # if conflicts:
-            #     path = astar.warp_path(path, conflicts, MAP_X_SIZE, MAP_Y_SIZE, SAFE_DISTANCE)
-            #     path = astar.smooth_path(path)  # Smooth the new warped path
-            #     copy_path = path.copy()
-            #     log_message("Path dynamically warped to avoid obstacles.", COLOR_YELLOW)
-
-            # Update robot velocity
             if prev_xbot_position is not None and prev_xbot_time is not None:
                 time_diff = time.time() - prev_xbot_time
                 distance = np.sqrt((xbot[0] - prev_xbot_position[0]) ** 2 + (xbot[1] - prev_xbot_position[1]) ** 2)
@@ -473,19 +415,64 @@ def handle_keypress(key):
 
             reset_map()
             add(angle)
-            for i in predicted_path_obstacles:
-                if i >= current:
-                    cv2.circle(img, path[i], 1, (0, 0, 255), -1)
+            predicted_path_obstacles, predicted_path_obstacle_positions = astar.predict_collisions(
+                [(robot_cursor_position, robot_cursor_velocity, robot_cursor_angle)], path, ROBOT_SIZE * 2.2)
 
-            # dynamic local window size
+            # Calculate dynamic window for robot movement
             points = astar.calculate_dynamic_window(
                 xbot=xbot,
                 velocity=xbot_velocity,
-                robot_size=ROBOT_SIZE * 2,
+                robot_size=ROBOT_SIZE * 2.5,
                 map_x_size=MAP_X_SIZE,
                 map_y_size=MAP_Y_SIZE
             )
             cv2.polylines(img, [points], True, (0, 50, 255), 2)
+
+            for i in predicted_path_obstacle_positions:
+                cv2.circle(img, i, 20, (0, 0, 255), -1)
+
+            last_path_point = None
+            affected_points = []
+            for i in range(len(path)):
+                path_point = path[i]
+
+                result = cv2.pointPolygonTest(np.array(points), path_point, False)
+
+                if result >= 0:
+                    if i >= current:
+                        cv2.circle(img, path_point, 1, (0, 255, 0), -1)
+                        affected_points.append(path_point)
+                        last_path_point = path_point
+            predicted_set = set([path[i] for i in predicted_path_obstacles])
+            affected_set = set(affected_points)
+
+            if (len(predicted_path_obstacles) > 0 and len(predicted_path_obstacle_positions) > 0 and
+                    predicted_set & affected_set):
+
+                unsafe_mask_temp, cost_mask_temp = astar.precompute_safe_zones(static_obstacles, obstacles + opponent_robots + predicted_path_obstacle_positions + [robot_cursor_position],
+                                                                     MAP_X_SIZE,
+                                                                     MAP_Y_SIZE, ROBOT_SIZE)
+                new_path = astar.a_star_search(xbot, last_path_point, unsafe_mask_temp, cost_mask_temp,
+                                               predicted_path_obstacle_positions + [robot_cursor_position])
+                for i in new_path:
+                    cv2.circle(img, i, 5, (20, 255, 255), -1)
+
+                if new_path:
+                    # Find the index of xbot position in the original path
+                    xbot_index = path.index(xbot)  # Assuming xbot is part of the path
+
+                    # Find the index of the last valid point in the original path
+                    last_valid_index = path.index(last_path_point)
+
+                    # Erase the part of the path from xbot to last_valid_point and replace it with new_path
+                    updated_path = path[:xbot_index] + new_path[1:] + path[last_valid_index + 1:]
+
+                    # Update the path with the combined new path
+                    path = updated_path
+
+                    # Visualize the updated path
+                    for i in path:
+                        cv2.circle(img, i, 5, (20, 0, 255), -1)
 
             # Display velocity
             if xbot_velocity > 0:

@@ -251,9 +251,12 @@ def predict_collisions(opponents, path, safe_distance):
         safe_distance: Minimum distance to maintain between the robot path and the opponent robots.
 
     Returns:
-        List of path indices where potential collisions are predicted.
+        Tuple:
+            - List of path indices where potential collisions are predicted.
+            - List of predicted opponent positions where collisions are likely to occur.
     """
-    conflicts = []
+    conflicts = []  # To store the indices of the path points where collisions are predicted
+    collision_positions = []  # To store the positions of the opponent robots where collisions are predicted
 
     # Loop through each opponent
     for opponent_position, opponent_velocity, opponent_angle in opponents:
@@ -262,8 +265,8 @@ def predict_collisions(opponents, path, safe_distance):
         # Predict the opponent's next position based on their velocity and direction
         if opponent_velocity > 0:
             predicted_opponent_position = (
-                opponent_position[0] + opponent_velocity * np.cos(opponent_angle),
-                opponent_position[1] + opponent_velocity * np.sin(opponent_angle)
+                int(opponent_position[0] + opponent_velocity * np.cos(opponent_angle)),
+                int(opponent_position[1] + opponent_velocity * np.sin(opponent_angle))
             )
         else:
             # For stationary robots, use their current position
@@ -274,9 +277,10 @@ def predict_collisions(opponents, path, safe_distance):
             # Calculate the distance from the opponent position to the path point
             distance_to_opponent = np.linalg.norm(np.array(point) - np.array(predicted_opponent_position))
             if distance_to_opponent <= safe_distance:
-                conflicts.append(i)
+                conflicts.append(i)  # Append the path index where collision is detected
+                collision_positions.append(predicted_opponent_position)  # Append the opponent's predicted position
 
-    # Remove duplicates in case of overlapping conflicts
+    # Remove duplicates in the conflicts list if needed
     conflicts = list(set(conflicts))
 
-    return conflicts
+    return conflicts, collision_positions
