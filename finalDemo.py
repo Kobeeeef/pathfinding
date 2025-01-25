@@ -29,7 +29,7 @@ robot_cursor_velocity = 0
 placing_robot = False
 opponent_robots = []
 demo_running = False
-background_img = cv2.imread("map.png")
+background_img = cv2.imread("img.png")
 if background_img is not None:
     background_img = cv2.resize(background_img, (MAP_X_SIZE, MAP_Y_SIZE))
 else:
@@ -62,7 +62,7 @@ def reset_map():
     img = background_img.copy()
 
 
-def load_static_obstacles(filename="obstacles.json"):
+def load_static_obstacles(filename="2025obstacles.json"):
     global static_obstacles
     try:
         with open(filename, "r") as f:
